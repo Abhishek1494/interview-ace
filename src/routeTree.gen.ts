@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiInterviewRouteImport } from './routes/api/interview'
 import { Route as ApiPortfolioRouteImport } from './routes/api/portfolio'
+import { Route as ApiPresenceRouteImport } from './routes/api/presence'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +29,44 @@ const ApiPortfolioRoute = ApiPortfolioRouteImport.update({
   path: '/api/portfolio',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPresenceRoute = ApiPresenceRouteImport.update({
+  id: '/api/presence',
+  path: '/api/presence',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/interview': typeof ApiInterviewRoute
   '/api/portfolio': typeof ApiPortfolioRoute
+  '/api/presence': typeof ApiPresenceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/interview': typeof ApiInterviewRoute
   '/api/portfolio': typeof ApiPortfolioRoute
+  '/api/presence': typeof ApiPresenceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/interview': typeof ApiInterviewRoute
   '/api/portfolio': typeof ApiPortfolioRoute
+  '/api/presence': typeof ApiPresenceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/interview' | '/api/portfolio'
+  fullPaths: '/' | '/api/interview' | '/api/portfolio' | '/api/presence'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/interview' | '/api/portfolio'
-  id: '__root__' | '/' | '/api/interview' | '/api/portfolio'
+  to: '/' | '/api/interview' | '/api/portfolio' | '/api/presence'
+  id: '__root__' | '/' | '/api/interview' | '/api/portfolio' | '/api/presence'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiInterviewRoute: typeof ApiInterviewRoute
   ApiPortfolioRoute: typeof ApiPortfolioRoute
+  ApiPresenceRoute: typeof ApiPresenceRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPortfolioRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/presence': {
+      id: '/api/presence'
+      path: '/api/presence'
+      fullPath: '/api/presence'
+      preLoaderRoute: typeof ApiPresenceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiInterviewRoute: ApiInterviewRoute,
   ApiPortfolioRoute: ApiPortfolioRoute,
+  ApiPresenceRoute: ApiPresenceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
