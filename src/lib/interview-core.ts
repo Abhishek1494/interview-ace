@@ -257,8 +257,10 @@ export const interviewSchema = {
         strengths: { type: "array", items: { type: "string" } },
         gaps: { type: "array", items: { type: "string" } },
         next: { type: "array", items: { type: "string" } },
+        communication: { type: "array", items: { type: "string" } },
       },
-      required: ["summary", "strengths", "gaps", "next"],
+      required: ["summary", "strengths", "gaps", "next", "communication"],
+
     },
   },
   required: ["reply", "done", "questionAsked", "dayCovered", "feedback"],
