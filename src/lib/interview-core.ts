@@ -42,7 +42,7 @@ export function getCandidate(id: string): Candidate | undefined {
 }
 
 export function moduleForDay(day: number) {
-  return curriculum.modules.find((m) => day >= m.days[0] && day <= m.days[1]);
+  return curriculum.modules.find((m) => day >= (m.days[0] ?? 0) && day <= (m.days[1] ?? 0));
 }
 
 export type FocusArea = {
@@ -53,7 +53,7 @@ export type FocusArea = {
   tools: string[];
   objectives: string[];
   signal: "strong" | "struggled" | "skipped";
-  attempts?: number;
+  attempts?: number | undefined;
 };
 
 /**
