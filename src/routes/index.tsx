@@ -38,7 +38,13 @@ export const Route = createFileRoute("/")({
   component: InterviewPage,
 });
 
-type Feedback = { summary: string; strengths: string[]; gaps: string[]; next: string[] };
+type Feedback = {
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+  next: string[];
+  communication?: string[];
+};
 type Msg = { role: "agent" | "candidate"; text: string };
 
 const signalStyle: Record<string, string> = {
@@ -49,6 +55,8 @@ const signalStyle: Record<string, string> = {
 
 function InterviewPage() {
   const [selected, setSelected] = useState<Candidate | null>(null);
+  const [stage, setStage] = useState<"select" | "setup" | "live">("select");
+  const [dossier, setDossier] = useState<Dossier | null>(null);
   const [sessionId, setSessionId] = useState("");
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -61,6 +69,10 @@ function InterviewPage() {
 
   const focus = useMemo(() => (selected ? buildFocusAreas(selected) : []), [selected]);
   const started = messages.length > 0;
+  const lastAnswer = useMemo(
+    () => [...messages].reverse().find((m) => m.role === "candidate")?.text ?? "",
+    [messages],
+  );
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -95,13 +107,20 @@ function InterviewPage() {
     }
   }
 
-  async function start(candidate: Candidate) {
-    const id = crypto.randomUUID();
+  function choose(candidate: Candidate) {
     setSelected(candidate);
+    setDossier(null);
+    setStage("setup");
+  }
+
+  async function start() {
+    if (!selected) return;
+    const id = crypto.randomUUID();
     setSessionId(id);
     setMessages([]);
     setFeedback(null);
-    await post({ sessionId: id, candidate });
+    setStage("live");
+    await post({ sessionId: id, candidate: selected, dossier });
   }
 
   async function send() {
@@ -114,12 +133,15 @@ function InterviewPage() {
 
   function reset() {
     setSelected(null);
+    setStage("select");
+    setDossier(null);
     setMessages([]);
     setFeedback(null);
     setInput("");
     setSessionId("");
     setError(null);
   }
+
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-8 md:px-8">
