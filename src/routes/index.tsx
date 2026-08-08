@@ -1,11 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowUp, CircleCheck, CircleSlash, Flame, RotateCcw, Square } from "lucide-react";
+import {
+  ArrowUp,
+  CircleCheck,
+  CircleSlash,
+  Flame,
+  MessageSquare,
+  RotateCcw,
+  Square,
+} from "lucide-react";
 
-import { candidates, buildFocusAreas, type Candidate } from "@/lib/interview-core";
+import { candidates, buildFocusAreas, type Candidate, type Dossier } from "@/lib/interview-core";
+import { CameraCoach } from "@/components/CameraCoach";
+import { DossierView, PortfolioScan } from "@/components/PortfolioScan";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
