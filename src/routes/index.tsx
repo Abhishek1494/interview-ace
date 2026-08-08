@@ -206,8 +206,19 @@ function InterviewPage() {
         </section>
       )}
 
-      {selected && (
+      {stage === "setup" && selected && (
+        <PortfolioScan
+          candidate={selected}
+          dossier={dossier}
+          onDossier={setDossier}
+          onStart={() => void start()}
+          onBack={reset}
+        />
+      )}
+
+      {stage === "live" && selected && (
         <section className="grid flex-1 gap-6 lg:grid-cols-[1fr_20rem]">
+
           <div className="flex min-h-[32rem] flex-col rounded-xl border border-border bg-card/70 backdrop-blur">
             <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto p-5">
               {messages.map((m, i) => (
