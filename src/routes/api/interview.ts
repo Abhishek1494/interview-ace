@@ -44,8 +44,9 @@ export const Route = createFileRoute("/api/interview")({
         try {
           if (body.candidate) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return json(await startInterview(sessionId, body.candidate as any));
+            return json(await startInterview(sessionId, body.candidate as any, body.dossier ?? null));
           }
+
           if (typeof body.message === "string" && body.message.trim()) {
             return json(await continueInterview(sessionId, body.message.trim()));
           }
