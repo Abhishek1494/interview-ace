@@ -30,6 +30,35 @@ export type CurriculumDay = {
   objectives: string[];
 };
 
+export type DossierProject = {
+  name: string;
+  url: string;
+  summary: string;
+  stack: string[];
+  probe: string;
+};
+
+/** Public-evidence dossier built from GitHub / portfolio pages before the interview. */
+export type Dossier = {
+  handle: string | null;
+  profile: string;
+  stack: string[];
+  projects: DossierProject[];
+  probes: string[];
+  sources: string[];
+  notes: string[];
+};
+
+/** One camera-frame read of the candidate's delivery. */
+export type PresenceReading = {
+  confidence: number;
+  posture: string;
+  eyeContact: string;
+  gestures: string;
+  energy: string;
+  note: string;
+};
+
 export const candidates = (candidatesData as { candidates: Candidate[] }).candidates;
 export const curriculum = curriculumData as {
   cohort: string;
