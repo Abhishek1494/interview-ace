@@ -66,10 +66,10 @@ export function buildFocusAreas(candidate: Candidate): FocusArea[] {
     const day = curriculum.days.find((d) => d.day === m.day);
     const signal: FocusArea["signal"] = m.skipped
       ? "skipped"
-      : (m.attempts ?? 1) >= 3
+      : m.passed === false || (m.attempts ?? 1) >= 3
         ? "struggled"
         : "strong";
-    const score = m.skipped ? 100 : (m.attempts ?? 1) * 10;
+    const score = m.skipped ? 100 : m.passed === false ? 90 : (m.attempts ?? 1) * 10;
     return {
       score,
       area: {
@@ -90,8 +90,25 @@ export function buildFocusAreas(candidate: Candidate): FocusArea[] {
   const hard = scored.filter((s) => s.area.signal !== "strong").sort((a, b) => b.score - a.score);
   const strong = scored.filter((s) => s.area.signal === "strong");
   const ordered = [...strong.slice(0, 2), ...hard, ...strong.slice(2)];
-  return ordered.map((s) => s.area).slice(0, 8);
+  return ordered.map((s) => s.area);
 }
+
+/** Modules and days the candidate never attempted — useful "unknown territory" probes. */
+export function buildCoverageMap(candidate: Candidate) {
+  const attempted = new Set(candidate.missions.map((m) => m.day));
+  return curriculum.modules.map((mod) => {
+    const days = curriculum.days.filter(
+      (d) => d.day >= (mod.days[0] ?? 0) && d.day <= (mod.days[1] ?? 0),
+    );
+    return {
+      module: mod.title,
+      range: `days ${mod.days[0]}-${mod.days[1]}`,
+      touched: days.filter((d) => attempted.has(d.day)).map((d) => d.day),
+      untouched: days.filter((d) => !attempted.has(d.day)),
+    };
+  });
+}
+
 
 export const MIN_QUESTIONS = 8;
 export const MAX_QUESTIONS = 12;
@@ -109,16 +126,29 @@ export function buildSystemPrompt(candidate: Candidate, focus: FocusArea[]) {
     )
     .join("\n");
 
+  const coverageText = buildCoverageMap(candidate)
+    .map(
+      (c) =>
+        `- Module ${c.module} (${c.range}): completed ${c.touched.length ? c.touched.join(", ") : "none"}` +
+        `${c.untouched.length ? ` | never attempted: ${c.untouched.map((d) => `Day ${d.day} ${d.title} [${d.type}]`).join("; ")}` : ""}`,
+    )
+    .join("\n");
+
   return `You are "Ada", a senior AI engineer conducting a live, spoken-style technical interview for a graduate of this cohort: ${curriculum.cohort}.
 
 CANDIDATE
-- Name: ${m.name}
+- Name: ${m.name} (${m.id})
 - Target role: ${m.jobRole}
 - Experience: ${m.yearsExperience} years, ${m.education}
+- Cohort status: ${m.status}
 - Cohort signals: ${s.commitDays} active days, ${s.missionsCompleted} missions completed, ${s.missionsFirstTry} passed first try.
 
 CURRICULUM DAYS TO PROBE (ranked by interview value; skipped/high-attempt topics are the most important to test):
 ${focusText}
+
+FULL 31-DAY COVERAGE MAP (use "never attempted" days only for light "how would you approach this" probes, never as gotchas):
+${coverageText}
+
 
 INTERVIEW RULES
 - Conduct a realistic conversation, not a questionnaire. React to what they said before asking the next thing.
