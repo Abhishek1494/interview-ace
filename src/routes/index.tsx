@@ -166,12 +166,13 @@ function InterviewPage() {
         )}
       </header>
 
-      {!selected && (
+      {stage === "select" && (
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {candidates.map((c) => (
             <button
               key={c.member.id}
-              onClick={() => void start(c)}
+              onClick={() => choose(c)}
+
               className="group rounded-xl border border-border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5"
             >
               <div className="flex items-start justify-between gap-2">
