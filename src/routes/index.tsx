@@ -357,7 +357,21 @@ function InterviewPage() {
                 ))}
               </ul>
             </div>
+
+            {dossier && (dossier.projects.length > 0 || dossier.probes.length > 0) && (
+              <div className="border-t border-border/70 pt-4">
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Portfolio dossier
+                </h3>
+                <DossierView dossier={dossier} compact />
+              </div>
+            )}
+
+            <div className="border-t border-border/70 pt-4">
+              <CameraCoach sessionId={sessionId} lastAnswer={lastAnswer} paused={busy || !!feedback} />
+            </div>
           </aside>
+
         </section>
       )}
 
