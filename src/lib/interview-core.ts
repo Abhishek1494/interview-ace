@@ -142,7 +142,39 @@ export function buildCoverageMap(candidate: Candidate) {
 export const MIN_QUESTIONS = 8;
 export const MAX_QUESTIONS = 12;
 
+export function buildDossierPrompt(dossier: Dossier | null): string {
+  if (!dossier || (!dossier.projects.length && !dossier.probes.length)) return "";
+  return `
+
+PORTFOLIO DOSSIER (scraped from their real public work${dossier.handle ? ` — github.com/${dossier.handle}` : ""})
+${dossier.profile}
+Stack seen in the wild: ${dossier.stack.join(", ") || "n/a"}
+${dossier.projects
+  .map(
+    (p, i) =>
+      `${i + 1}. ${p.name} (${p.url})\n   ${p.summary}\n   stack: ${p.stack.join(", ") || "n/a"}\n   probe: ${p.probe}`,
+  )
+  .join("\n")}
+Cross-cutting probes: ${dossier.probes.map((p) => `• ${p}`).join(" ")}
+
+PORTFOLIO RULES
+- Use at least 2 of these portfolio probes during the interview; they count toward your question total but NOT toward curriculum-day coverage.
+- Reference their real project by name ("I noticed in <repo> you…"). Never invent details that are not in the dossier.
+- Connect their real work back to the cohort curriculum wherever it overlaps.`;
+}
+
+export function buildPresencePrompt(readings: PresenceReading[]): string {
+  if (!readings.length) return "";
+  const last = readings.slice(-6);
+  return `
+
+DELIVERY OBSERVATIONS (camera read of the candidate while answering; private, never mention them mid-interview)
+${last.map((r) => `- confidence ${r.confidence}/100 · posture: ${r.posture} · eye contact: ${r.eyeContact} · gestures: ${r.gestures} · energy: ${r.energy} — ${r.note}`).join("\n")}
+Use these ONLY when writing the final feedback's "communication" points, and always pair a delivery note with the topic it happened on.`;
+}
+
 export function buildSystemPrompt(candidate: Candidate, focus: FocusArea[]) {
+
   const m = candidate.member;
   const s = candidate.signals;
   const focusText = focus
