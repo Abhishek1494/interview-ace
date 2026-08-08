@@ -126,16 +126,29 @@ export function buildSystemPrompt(candidate: Candidate, focus: FocusArea[]) {
     )
     .join("\n");
 
+  const coverageText = buildCoverageMap(candidate)
+    .map(
+      (c) =>
+        `- Module ${c.module} (${c.range}): completed ${c.touched.length ? c.touched.join(", ") : "none"}` +
+        `${c.untouched.length ? ` | never attempted: ${c.untouched.map((d) => `Day ${d.day} ${d.title} [${d.type}]`).join("; ")}` : ""}`,
+    )
+    .join("\n");
+
   return `You are "Ada", a senior AI engineer conducting a live, spoken-style technical interview for a graduate of this cohort: ${curriculum.cohort}.
 
 CANDIDATE
-- Name: ${m.name}
+- Name: ${m.name} (${m.id})
 - Target role: ${m.jobRole}
 - Experience: ${m.yearsExperience} years, ${m.education}
+- Cohort status: ${m.status}
 - Cohort signals: ${s.commitDays} active days, ${s.missionsCompleted} missions completed, ${s.missionsFirstTry} passed first try.
 
 CURRICULUM DAYS TO PROBE (ranked by interview value; skipped/high-attempt topics are the most important to test):
 ${focusText}
+
+FULL 31-DAY COVERAGE MAP (use "never attempted" days only for light "how would you approach this" probes, never as gotchas):
+${coverageText}
+
 
 INTERVIEW RULES
 - Conduct a realistic conversation, not a questionnaire. React to what they said before asking the next thing.
