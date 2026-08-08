@@ -260,9 +260,18 @@ function InterviewPage() {
                     [
                       ["Strengths", feedback.strengths, CircleCheck, "text-signal-strong"],
                       ["Gaps", feedback.gaps, CircleSlash, "text-signal-skipped"],
+                      [
+                        "Communication & delivery",
+                        feedback.communication ?? [],
+                        MessageSquare,
+                        "text-signal-struggled",
+                      ],
                       ["Next steps", feedback.next, Flame, "text-primary"],
                     ] as const
-                  ).map(([title, items, Icon, color]) => (
+                  )
+                    .filter(([, items]) => items.length > 0)
+                    .map(([title, items, Icon, color]) => (
+
                     <div key={title}>
                       <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                         {title}
