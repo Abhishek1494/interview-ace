@@ -1,11 +1,16 @@
 import {
+  buildDossierPrompt,
   buildFocusAreas,
+  buildPresencePrompt,
   buildSystemPrompt,
   getCandidate,
   interviewSchema,
   MAX_QUESTIONS,
   type Candidate,
+  type Dossier,
+  type PresenceReading,
 } from "@/lib/interview-core";
+import { callStructured, type Item } from "@/lib/ai-gateway.server";
 
 type Turn = { role: "user" | "assistant"; text: string };
 
@@ -15,6 +20,8 @@ type Session = {
   turns: Turn[];
   questions: number;
   days: Set<number>;
+  dossier: Dossier | null;
+  presence: PresenceReading[];
   updatedAt: number;
 };
 
@@ -26,15 +33,18 @@ function gc() {
   for (const [id, s] of sessions) if (now - s.updatedAt > SESSION_TTL) sessions.delete(id);
 }
 
+export type Feedback = {
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+  next: string[];
+  communication: string[];
+};
+
 export type InterviewResult = {
   reply: string;
   done: boolean;
-  feedback?: {
-    summary: string;
-    strengths: string[];
-    gaps: string[];
-    next: string[];
-  };
+  feedback?: Feedback;
 };
 
 type ModelOut = {
@@ -42,8 +52,27 @@ type ModelOut = {
   done: boolean;
   questionAsked: boolean;
   dayCovered: number | null;
-  feedback: { summary: string; strengths: string[]; gaps: string[]; next: string[] } | null;
+  feedback: Feedback | null;
 };
+
+/** Attach a camera-derived delivery reading to a live session. */
+export function recordPresence(sessionId: string, reading: PresenceReading): boolean {
+  const session = sessions.get(sessionId);
+  if (!session) return false;
+  session.presence.push(reading);
+  if (session.presence.length > 20) session.presence.shift();
+  session.updatedAt = Date.now();
+  return true;
+}
+
+/** The last thing Ada asked — used as context for the camera read. */
+export function lastQuestion(sessionId: string): string {
+  const session = sessions.get(sessionId);
+  if (!session) return "";
+  const last = [...session.turns].reverse().find((t) => t.role === "assistant");
+  return last?.text ?? "";
+}
+
 
 async function callModel(session: Session, directive: string): Promise<ModelOut> {
   const apiKey = process.env["LOVABLE_API_KEY"];
