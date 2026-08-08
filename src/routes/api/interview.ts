@@ -1,10 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import type { Dossier } from "@/lib/interview-core";
+
 type Body = {
   sessionId?: string;
   candidate?: unknown;
   message?: string;
+  dossier?: Dossier | null;
 };
+
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -40,8 +44,9 @@ export const Route = createFileRoute("/api/interview")({
         try {
           if (body.candidate) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return json(await startInterview(sessionId, body.candidate as any));
+            return json(await startInterview(sessionId, body.candidate as any, body.dossier ?? null));
           }
+
           if (typeof body.message === "string" && body.message.trim()) {
             return json(await continueInterview(sessionId, body.message.trim()));
           }

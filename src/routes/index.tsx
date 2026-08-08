@@ -1,11 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowUp, CircleCheck, CircleSlash, Flame, RotateCcw, Square } from "lucide-react";
+import {
+  ArrowUp,
+  CircleCheck,
+  CircleSlash,
+  Flame,
+  MessageSquare,
+  RotateCcw,
+  Square,
+} from "lucide-react";
 
-import { candidates, buildFocusAreas, type Candidate } from "@/lib/interview-core";
+import { candidates, buildFocusAreas, type Candidate, type Dossier } from "@/lib/interview-core";
+import { CameraCoach } from "@/components/CameraCoach";
+import { DossierView, PortfolioScan } from "@/components/PortfolioScan";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -27,7 +38,13 @@ export const Route = createFileRoute("/")({
   component: InterviewPage,
 });
 
-type Feedback = { summary: string; strengths: string[]; gaps: string[]; next: string[] };
+type Feedback = {
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+  next: string[];
+  communication?: string[];
+};
 type Msg = { role: "agent" | "candidate"; text: string };
 
 const signalStyle: Record<string, string> = {
@@ -38,6 +55,8 @@ const signalStyle: Record<string, string> = {
 
 function InterviewPage() {
   const [selected, setSelected] = useState<Candidate | null>(null);
+  const [stage, setStage] = useState<"select" | "setup" | "live">("select");
+  const [dossier, setDossier] = useState<Dossier | null>(null);
   const [sessionId, setSessionId] = useState("");
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -50,6 +69,10 @@ function InterviewPage() {
 
   const focus = useMemo(() => (selected ? buildFocusAreas(selected) : []), [selected]);
   const started = messages.length > 0;
+  const lastAnswer = useMemo(
+    () => [...messages].reverse().find((m) => m.role === "candidate")?.text ?? "",
+    [messages],
+  );
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -84,13 +107,20 @@ function InterviewPage() {
     }
   }
 
-  async function start(candidate: Candidate) {
-    const id = crypto.randomUUID();
+  function choose(candidate: Candidate) {
     setSelected(candidate);
+    setDossier(null);
+    setStage("setup");
+  }
+
+  async function start() {
+    if (!selected) return;
+    const id = crypto.randomUUID();
     setSessionId(id);
     setMessages([]);
     setFeedback(null);
-    await post({ sessionId: id, candidate });
+    setStage("live");
+    await post({ sessionId: id, candidate: selected, dossier });
   }
 
   async function send() {
@@ -103,12 +133,15 @@ function InterviewPage() {
 
   function reset() {
     setSelected(null);
+    setStage("select");
+    setDossier(null);
     setMessages([]);
     setFeedback(null);
     setInput("");
     setSessionId("");
     setError(null);
   }
+
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-8 md:px-8">
@@ -133,12 +166,13 @@ function InterviewPage() {
         )}
       </header>
 
-      {!selected && (
+      {stage === "select" && (
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {candidates.map((c) => (
             <button
               key={c.member.id}
-              onClick={() => void start(c)}
+              onClick={() => choose(c)}
+
               className="group rounded-xl border border-border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5"
             >
               <div className="flex items-start justify-between gap-2">
@@ -172,8 +206,19 @@ function InterviewPage() {
         </section>
       )}
 
-      {selected && (
+      {stage === "setup" && selected && (
+        <PortfolioScan
+          candidate={selected}
+          dossier={dossier}
+          onDossier={setDossier}
+          onStart={() => void start()}
+          onBack={reset}
+        />
+      )}
+
+      {stage === "live" && selected && (
         <section className="grid flex-1 gap-6 lg:grid-cols-[1fr_20rem]">
+
           <div className="flex min-h-[32rem] flex-col rounded-xl border border-border bg-card/70 backdrop-blur">
             <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto p-5">
               {messages.map((m, i) => (
@@ -215,9 +260,18 @@ function InterviewPage() {
                     [
                       ["Strengths", feedback.strengths, CircleCheck, "text-signal-strong"],
                       ["Gaps", feedback.gaps, CircleSlash, "text-signal-skipped"],
+                      [
+                        "Communication & delivery",
+                        feedback.communication ?? [],
+                        MessageSquare,
+                        "text-signal-struggled",
+                      ],
                       ["Next steps", feedback.next, Flame, "text-primary"],
                     ] as const
-                  ).map(([title, items, Icon, color]) => (
+                  )
+                    .filter(([, items]) => items.length > 0)
+                    .map(([title, items, Icon, color]) => (
+
                     <div key={title}>
                       <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                         {title}
@@ -303,7 +357,21 @@ function InterviewPage() {
                 ))}
               </ul>
             </div>
+
+            {dossier && (dossier.projects.length > 0 || dossier.probes.length > 0) && (
+              <div className="border-t border-border/70 pt-4">
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Portfolio dossier
+                </h3>
+                <DossierView dossier={dossier} compact />
+              </div>
+            )}
+
+            <div className="border-t border-border/70 pt-4">
+              <CameraCoach sessionId={sessionId} lastAnswer={lastAnswer} paused={busy || !!feedback} />
+            </div>
           </aside>
+
         </section>
       )}
 

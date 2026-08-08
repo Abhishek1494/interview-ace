@@ -1,11 +1,16 @@
 import {
+  buildDossierPrompt,
   buildFocusAreas,
+  buildPresencePrompt,
   buildSystemPrompt,
   getCandidate,
   interviewSchema,
   MAX_QUESTIONS,
   type Candidate,
+  type Dossier,
+  type PresenceReading,
 } from "@/lib/interview-core";
+import { callStructured, type Item } from "@/lib/ai-gateway.server";
 
 type Turn = { role: "user" | "assistant"; text: string };
 
@@ -15,6 +20,8 @@ type Session = {
   turns: Turn[];
   questions: number;
   days: Set<number>;
+  dossier: Dossier | null;
+  presence: PresenceReading[];
   updatedAt: number;
 };
 
@@ -26,15 +33,18 @@ function gc() {
   for (const [id, s] of sessions) if (now - s.updatedAt > SESSION_TTL) sessions.delete(id);
 }
 
+export type Feedback = {
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+  next: string[];
+  communication: string[];
+};
+
 export type InterviewResult = {
   reply: string;
   done: boolean;
-  feedback?: {
-    summary: string;
-    strengths: string[];
-    gaps: string[];
-    next: string[];
-  };
+  feedback?: Feedback;
 };
 
 type ModelOut = {
@@ -42,16 +52,43 @@ type ModelOut = {
   done: boolean;
   questionAsked: boolean;
   dayCovered: number | null;
-  feedback: { summary: string; strengths: string[]; gaps: string[]; next: string[] } | null;
+  feedback: Feedback | null;
 };
 
-async function callModel(session: Session, directive: string): Promise<ModelOut> {
-  const apiKey = process.env["LOVABLE_API_KEY"];
-  if (!apiKey) throw new Error("Missing LOVABLE_API_KEY");
+/** Attach a camera-derived delivery reading to a live session. */
+export function recordPresence(sessionId: string, reading: PresenceReading): boolean {
+  const session = sessions.get(sessionId);
+  if (!session) return false;
+  session.presence.push(reading);
+  if (session.presence.length > 20) session.presence.shift();
+  session.updatedAt = Date.now();
+  return true;
+}
 
-  const input = [
-    { role: "system", content: [{ type: "input_text", text: session.system }] },
-    ...session.turns.map((t) =>
+/** The last thing Ada asked — used as context for the camera read. */
+export function lastQuestion(sessionId: string): string {
+  const session = sessions.get(sessionId);
+  if (!session) return "";
+  const last = [...session.turns].reverse().find((t) => t.role === "assistant");
+  return last?.text ?? "";
+}
+
+
+async function callModel(session: Session, directive: string): Promise<ModelOut> {
+  const items: Item[] = [
+    {
+      role: "system",
+      content: [
+        {
+          type: "input_text",
+          text:
+            session.system +
+            buildDossierPrompt(session.dossier) +
+            buildPresencePrompt(session.presence),
+        },
+      ],
+    },
+    ...session.turns.map<Item>((t) =>
       t.role === "user"
         ? { role: "user", content: [{ type: "input_text", text: t.text }] }
         : { role: "assistant", content: [{ type: "output_text", text: t.text }] },
@@ -59,76 +96,18 @@ async function callModel(session: Session, directive: string): Promise<ModelOut>
     { role: "system", content: [{ type: "input_text", text: directive }] },
   ];
 
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Lovable-API-Key": apiKey,
-      "X-Lovable-AIG-SDK": "fetch",
-    },
-    body: JSON.stringify({
-      model: "openai/gpt-5.6-sol",
-      input,
-      stream: true,
-      store: false,
-      reasoning: { effort: "low", summary: "auto" },
-      text: {
-        format: {
-          type: "json_schema",
-          name: "interview_turn",
-          strict: true,
-          schema: interviewSchema,
-        },
-      },
-    }),
+  return callStructured<ModelOut>({
+    items,
+    schema: interviewSchema,
+    schemaName: "interview_turn",
+    effort: "low",
   });
-
-  if (!res.ok || !res.body) {
-    const detail = await res.text().catch(() => "");
-    const err = new Error(detail || `Gateway error ${res.status}`) as Error & { status?: number };
-    err.status = res.status;
-    throw err;
-  }
-
-  // Read the SSE stream and accumulate the final text.
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  let text = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const lines = buf.split("\n");
-    buf = lines.pop() ?? "";
-    for (const line of lines) {
-      if (!line.startsWith("data:")) continue;
-      const payload = line.slice(5).trim();
-      if (!payload || payload === "[DONE]") continue;
-      try {
-        const evt = JSON.parse(payload) as {
-          type?: string;
-          delta?: string;
-          response?: { output_text?: string };
-        };
-        if (evt.type === "response.output_text.delta" && typeof evt.delta === "string") {
-          text += evt.delta;
-        } else if (evt.type === "response.completed" && evt.response?.output_text) {
-          if (!text) text = evt.response.output_text;
-        }
-      } catch {
-        /* ignore keepalive / partial frames */
-      }
-    }
-  }
-
-  const parsed = JSON.parse(text) as ModelOut;
-  return parsed;
 }
 
 export async function startInterview(
   sessionId: string,
   candidateInput: Candidate | { id?: string } | undefined,
+  dossier?: Dossier | null,
 ): Promise<InterviewResult> {
   gc();
   let candidate: Candidate | undefined;
@@ -146,16 +125,22 @@ export async function startInterview(
     turns: [],
     questions: 0,
     days: new Set<number>(),
+    dossier: dossier ?? null,
+    presence: [],
     updatedAt: Date.now(),
   };
   sessions.set(sessionId, session);
 
+  const hasDossier = !!dossier?.projects.length;
   const out = await callModel(
     session,
-    "Open the interview: greet the candidate by first name, set expectations in one sentence (roughly 8-10 questions, conversational, based on their cohort work), then ask your first question. done=false.",
+    "Open the interview: greet the candidate by first name, set expectations in one sentence (roughly 8-10 questions, conversational, based on their cohort work" +
+      (hasDossier ? " and the public projects you looked at" : "") +
+      "), then ask your first question. done=false.",
   );
   return commit(session, out);
 }
+
 
 export async function continueInterview(
   sessionId: string,
