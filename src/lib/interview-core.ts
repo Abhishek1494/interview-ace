@@ -227,7 +227,9 @@ ENDING
   summary (3-4 sentences, honest and specific, referencing actual answers),
   strengths (2-5 concise points),
   gaps (2-5 concise points, each tied to a curriculum day/topic),
-  next (3-5 concrete actionable next steps, e.g. "Rebuild Day 10 retrieval with hybrid search and measure recall@5").
+  next (3-5 concrete actionable next steps, e.g. "Rebuild Day 10 retrieval with hybrid search and measure recall@5"),
+  communication (0-4 points on how they came across — clarity, structure, confidence; if DELIVERY OBSERVATIONS are present, ground these in them and tie each to the topic it happened on; otherwise base them on their writing and leave it empty if you have nothing honest to say).
+
 - While the interview is ongoing, done=false and feedback=null.
 
 Always answer with the JSON object required by the schema.`;
