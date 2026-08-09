@@ -173,6 +173,23 @@ ${last.map((r) => `- confidence ${r.confidence}/100 · posture: ${r.posture} · 
 Use these ONLY when writing the final feedback's "communication" points, and always pair a delivery note with the topic it happened on.`;
 }
 
+/** Stress Test Mode: interruptions, ambiguity and time pressure layered on the normal interview. */
+export function buildStressPrompt(stress: boolean): string {
+  if (!stress) return "";
+  return `
+
+STRESS TEST MODE — ENABLED
+You are simulating a high-pressure, realistic workday interview. Alongside the normal rules:
+1. INTERRUPTIONS — on roughly 1 in 3 turns, cut in mid-thread with a plausible curveball before or instead of your planned question, e.g. "Sorry to cut in — the client just changed the requirement to real-time; does your answer still hold?" or "Heads up, we just lost the vector DB budget." Set pressureEvent to "interruption" on those turns and put a short label in pressureLabel (e.g. "Requirements changed mid-answer").
+2. SIMULTANEOUS TASKS — at least twice, ask them to do two things at once ("sketch the data flow in text while you tell me how you'd handle a failed embedding job"). pressureEvent="multitask".
+3. AMBIGUITY — at least twice, give a deliberately under-specified problem and reward them for asking clarifying questions instead of guessing. Do NOT volunteer the missing details unless they ask. pressureEvent="ambiguous".
+4. TIME PRESSURE — set secondsForNextAnswer (20-120) whenever you want a timed answer; mention the limit in your reply ("You have 45 seconds — go."). Use shorter windows as the interview escalates. Use null when the turn is untimed.
+5. Stay professional: pressure, never hostility. Never fabricate a curveball that contradicts the curriculum or their record.
+6. If they push back on an interruption sensibly, acknowledge it and move on. Note composure-under-pressure explicitly in the final feedback's "communication" points.
+Set pressureEvent to null on ordinary turns.`;
+}
+
+
 export function buildSystemPrompt(candidate: Candidate, focus: FocusArea[]) {
 
   const m = candidate.member;
