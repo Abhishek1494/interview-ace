@@ -266,6 +266,19 @@ export const interviewSchema = {
       type: ["integer", "null"],
       description: "Curriculum day number this turn's question targets, or null.",
     },
+    pressureEvent: {
+      type: ["string", "null"],
+      enum: ["interruption", "multitask", "ambiguous", "curveball", null],
+      description: "Stress-test event applied on this turn, or null.",
+    },
+    pressureLabel: {
+      type: ["string", "null"],
+      description: "Short label for the pressure event shown to the candidate, or null.",
+    },
+    secondsForNextAnswer: {
+      type: ["integer", "null"],
+      description: "Countdown in seconds the candidate has to answer this turn, or null.",
+    },
     feedback: {
       type: ["object", "null"],
       additionalProperties: false,
@@ -280,5 +293,14 @@ export const interviewSchema = {
 
     },
   },
-  required: ["reply", "done", "questionAsked", "dayCovered", "feedback"],
+  required: [
+    "reply",
+    "done",
+    "questionAsked",
+    "dayCovered",
+    "pressureEvent",
+    "pressureLabel",
+    "secondsForNextAnswer",
+    "feedback",
+  ],
 } as const;
