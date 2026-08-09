@@ -7,7 +7,9 @@ type Body = {
   candidate?: unknown;
   message?: string;
   dossier?: Dossier | null;
+  stress?: boolean;
 };
+
 
 
 const json = (data: unknown, status = 200) =>
