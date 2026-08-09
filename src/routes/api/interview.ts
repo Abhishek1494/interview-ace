@@ -7,7 +7,9 @@ type Body = {
   candidate?: unknown;
   message?: string;
   dossier?: Dossier | null;
+  stress?: boolean;
 };
+
 
 
 const json = (data: unknown, status = 200) =>
@@ -44,7 +46,14 @@ export const Route = createFileRoute("/api/interview")({
         try {
           if (body.candidate) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return json(await startInterview(sessionId, body.candidate as any, body.dossier ?? null));
+            return json(
+              await startInterview(
+                sessionId,
+                body.candidate as any,
+                body.dossier ?? null,
+                body.stress === true,
+              ),
+            );
           }
 
           if (typeof body.message === "string" && body.message.trim()) {

@@ -2,6 +2,7 @@ import {
   buildDossierPrompt,
   buildFocusAreas,
   buildPresencePrompt,
+  buildStressPrompt,
   buildSystemPrompt,
   getCandidate,
   interviewSchema,
@@ -22,6 +23,8 @@ type Session = {
   days: Set<number>;
   dossier: Dossier | null;
   presence: PresenceReading[];
+  stress: boolean;
+  turnsSinceEvent: number;
   updatedAt: number;
 };
 
@@ -44,6 +47,9 @@ export type Feedback = {
 export type InterviewResult = {
   reply: string;
   done: boolean;
+  pressureEvent?: string;
+  pressureLabel?: string;
+  secondsForNextAnswer?: number;
   feedback?: Feedback;
 };
 
@@ -52,6 +58,9 @@ type ModelOut = {
   done: boolean;
   questionAsked: boolean;
   dayCovered: number | null;
+  pressureEvent: string | null;
+  pressureLabel: string | null;
+  secondsForNextAnswer: number | null;
   feedback: Feedback | null;
 };
 
@@ -84,7 +93,8 @@ async function callModel(session: Session, directive: string): Promise<ModelOut>
           text:
             session.system +
             buildDossierPrompt(session.dossier) +
-            buildPresencePrompt(session.presence),
+            buildPresencePrompt(session.presence) +
+            buildStressPrompt(session.stress),
         },
       ],
     },
@@ -108,6 +118,7 @@ export async function startInterview(
   sessionId: string,
   candidateInput: Candidate | { id?: string } | undefined,
   dossier?: Dossier | null,
+  stress = false,
 ): Promise<InterviewResult> {
   gc();
   let candidate: Candidate | undefined;
@@ -127,6 +138,8 @@ export async function startInterview(
     days: new Set<number>(),
     dossier: dossier ?? null,
     presence: [],
+    stress,
+    turnsSinceEvent: 0,
     updatedAt: Date.now(),
   };
   sessions.set(sessionId, session);
@@ -136,7 +149,11 @@ export async function startInterview(
     session,
     "Open the interview: greet the candidate by first name, set expectations in one sentence (roughly 8-10 questions, conversational, based on their cohort work" +
       (hasDossier ? " and the public projects you looked at" : "") +
-      "), then ask your first question. done=false.",
+      ")," +
+      (stress
+        ? " warn them in one short line that this is a stress-test interview with interruptions, ambiguous briefs and timed answers,"
+        : "") +
+      " then ask your first question. done=false.",
   );
   return commit(session, out);
 }
@@ -168,7 +185,14 @@ export async function continueInterview(
             : "Minimum coverage reached: you may either ask one more sharp question or close the interview with done=true and full feedback."
         } Respond to what the candidate just said before your next question.`;
 
-  const out = await callModel(session, directive);
+  const stressDirective =
+    session.stress && session.questions < MAX_QUESTIONS
+      ? session.turnsSinceEvent >= 2
+        ? " STRESS: it has been a while since the last curveball — this turn MUST apply a pressure event (interruption, multitask or ambiguous brief) and set pressureEvent/pressureLabel accordingly."
+        : " STRESS: keep the pressure realistic; add a timed window with secondsForNextAnswer when it fits."
+      : "";
+
+  const out = await callModel(session, directive + stressDirective);
   return commit(session, out);
 }
 
@@ -178,7 +202,16 @@ function commit(session: Session, out: ModelOut): InterviewResult {
   if (typeof out.dayCovered === "number") session.days.add(out.dayCovered);
   session.updatedAt = Date.now();
 
+  if (out.pressureEvent) session.turnsSinceEvent = 0;
+  else session.turnsSinceEvent += 1;
+
   const result: InterviewResult = { reply: out.reply, done: out.done };
+  if (session.stress && out.pressureEvent) {
+    result.pressureEvent = out.pressureEvent;
+    if (out.pressureLabel) result.pressureLabel = out.pressureLabel;
+  }
+  if (session.stress && typeof out.secondsForNextAnswer === "number" && !out.done)
+    result.secondsForNextAnswer = out.secondsForNextAnswer;
   if (out.done && out.feedback) result.feedback = out.feedback;
   return result;
 }
