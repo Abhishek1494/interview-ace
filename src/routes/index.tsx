@@ -8,6 +8,8 @@ import {
   MessageSquare,
   RotateCcw,
   Square,
+  Timer,
+  Zap,
 } from "lucide-react";
 
 import { candidates, buildFocusAreas, type Candidate, type Dossier } from "@/lib/interview-core";
@@ -45,7 +47,20 @@ type Feedback = {
   next: string[];
   communication?: string[];
 };
-type Msg = { role: "agent" | "candidate"; text: string };
+type Msg = {
+  role: "agent" | "candidate";
+  text: string;
+  pressureEvent?: string;
+  pressureLabel?: string;
+  seconds?: number;
+};
+
+const pressureCopy: Record<string, string> = {
+  interruption: "Interruption",
+  multitask: "Simultaneous task",
+  ambiguous: "Ambiguous brief",
+  curveball: "Curveball",
+};
 
 const signalStyle: Record<string, string> = {
   strong: "text-signal-strong border-signal-strong/40 bg-signal-strong/10",
@@ -57,6 +72,9 @@ function InterviewPage() {
   const [selected, setSelected] = useState<Candidate | null>(null);
   const [stage, setStage] = useState<"select" | "setup" | "live">("select");
   const [dossier, setDossier] = useState<Dossier | null>(null);
+  const [stress, setStress] = useState(false);
+  const [deadline, setDeadline] = useState<number | null>(null);
+  const [remaining, setRemaining] = useState(0);
   const [sessionId, setSessionId] = useState("");
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -82,6 +100,14 @@ function InterviewPage() {
     if (started && !busy && !feedback) inputRef.current?.focus();
   }, [started, busy, feedback]);
 
+  useEffect(() => {
+    if (deadline === null) return;
+    const tick = () => setRemaining(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+    tick();
+    const t = setInterval(tick, 250);
+    return () => clearInterval(t);
+  }, [deadline]);
+
   async function post(body: Record<string, unknown>) {
     setBusy(true);
     setError(null);
@@ -94,11 +120,30 @@ function InterviewPage() {
       const data = (await res.json()) as {
         reply?: string;
         done?: boolean;
+        pressureEvent?: string;
+        pressureLabel?: string;
+        secondsForNextAnswer?: number;
         feedback?: Feedback;
         error?: string;
       };
       if (!res.ok || data.error) throw new Error(data.error ?? "Something went wrong");
-      if (data.reply) setMessages((m) => [...m, { role: "agent", text: data.reply as string }]);
+      if (data.reply)
+        setMessages((m) => [
+          ...m,
+          {
+            role: "agent",
+            text: data.reply as string,
+            ...(data.pressureEvent ? { pressureEvent: data.pressureEvent } : {}),
+            ...(data.pressureLabel ? { pressureLabel: data.pressureLabel } : {}),
+            ...(data.secondsForNextAnswer ? { seconds: data.secondsForNextAnswer } : {}),
+          },
+        ]);
+      if (data.secondsForNextAnswer && !data.done) {
+        setDeadline(Date.now() + data.secondsForNextAnswer * 1000);
+        setRemaining(data.secondsForNextAnswer);
+      } else {
+        setDeadline(null);
+      }
       if (data.done && data.feedback) setFeedback(data.feedback);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
@@ -120,13 +165,15 @@ function InterviewPage() {
     setMessages([]);
     setFeedback(null);
     setStage("live");
-    await post({ sessionId: id, candidate: selected, dossier });
+    setDeadline(null);
+    await post({ sessionId: id, candidate: selected, dossier, stress });
   }
 
   async function send() {
     const text = input.trim();
     if (!text || busy || feedback) return;
     setInput("");
+    setDeadline(null);
     setMessages((m) => [...m, { role: "candidate", text }]);
     await post({ sessionId, message: text });
   }
@@ -140,6 +187,7 @@ function InterviewPage() {
     setInput("");
     setSessionId("");
     setError(null);
+    setDeadline(null);
   }
 
 
@@ -207,13 +255,43 @@ function InterviewPage() {
       )}
 
       {stage === "setup" && selected && (
-        <PortfolioScan
-          candidate={selected}
-          dossier={dossier}
-          onDossier={setDossier}
-          onStart={() => void start()}
-          onBack={reset}
-        />
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() => setStress((v) => !v)}
+            aria-pressed={stress}
+            className={cn(
+              "flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-colors",
+              stress
+                ? "border-signal-struggled/60 bg-signal-struggled/10"
+                : "border-border bg-card hover:border-primary/40",
+            )}
+          >
+            <Zap
+              className={cn(
+                "mt-0.5 size-5 shrink-0",
+                stress ? "text-signal-struggled" : "text-muted-foreground",
+              )}
+            />
+            <div>
+              <p className="font-display text-sm">
+                Stress Test Mode {stress ? "· ON" : "· off"}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Ada interrupts mid-answer with changed requirements, stacks simultaneous tasks,
+                hands over deliberately ambiguous briefs, and puts a live countdown on some
+                answers. Composure under pressure lands in the final feedback.
+              </p>
+            </div>
+          </button>
+          <PortfolioScan
+            candidate={selected}
+            dossier={dossier}
+            onDossier={setDossier}
+            onStart={() => void start()}
+            onBack={reset}
+          />
+        </div>
       )}
 
       {stage === "live" && selected && (
@@ -228,6 +306,14 @@ function InterviewPage() {
                       <p className="mb-1 font-display text-xs uppercase tracking-widest text-primary">
                         Ada
                       </p>
+                      {m.pressureEvent && (
+                        <p className="mb-1.5 inline-flex items-center gap-1.5 rounded-full border border-signal-struggled/40 bg-signal-struggled/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-signal-struggled">
+                          <Zap className="size-3" />
+                          {pressureCopy[m.pressureEvent] ?? m.pressureEvent}
+                          {m.pressureLabel ? ` · ${m.pressureLabel}` : ""}
+                          {m.seconds ? ` · ${m.seconds}s` : ""}
+                        </p>
+                      )}
                       <p className="whitespace-pre-wrap leading-relaxed text-foreground">{m.text}</p>
                     </div>
                   ) : (
@@ -296,6 +382,36 @@ function InterviewPage() {
                   <Square className="size-4" /> Interview complete — start another
                 </Button>
               ) : (
+                <>
+                  {deadline !== null && (
+                    <div className="mb-2 flex items-center gap-2 px-1">
+                      <Timer
+                        className={cn(
+                          "size-4",
+                          remaining <= 10 ? "text-destructive" : "text-signal-struggled",
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          "font-display text-xs tabular-nums",
+                          remaining <= 10 ? "text-destructive" : "text-signal-struggled",
+                        )}
+                      >
+                        {remaining > 0 ? `${remaining}s to answer` : "Time's up — answer anyway"}
+                      </span>
+                      <div className="h-1 flex-1 overflow-hidden rounded-full bg-secondary">
+                        <div
+                          className={cn(
+                            "h-full rounded-full transition-[width] duration-300",
+                            remaining <= 10 ? "bg-destructive" : "bg-signal-struggled",
+                          )}
+                          style={{
+                            width: `${Math.min(100, (remaining / Math.max(1, messages[messages.length - 1]?.seconds ?? remaining)) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 <div className="flex items-end gap-2 rounded-lg border border-input bg-background/60 p-2">
                   <textarea
                     ref={inputRef}
@@ -321,6 +437,7 @@ function InterviewPage() {
                     <ArrowUp className="size-4" />
                   </Button>
                 </div>
+                </>
               )}
             </div>
           </div>
@@ -332,6 +449,11 @@ function InterviewPage() {
                 {selected.member.jobRole} · {selected.member.yearsExperience} yrs
               </p>
             </div>
+            {stress && (
+              <p className="inline-flex items-center gap-1.5 rounded-full border border-signal-struggled/40 bg-signal-struggled/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-signal-struggled">
+                <Zap className="size-3" /> Stress test mode
+              </p>
+            )}
             <div>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Interview focus
