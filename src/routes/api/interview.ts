@@ -65,7 +65,13 @@ export const Route = createFileRoute("/api/interview")({
           const message = err instanceof Error ? err.message : "Interview failed";
           if (status === 429) return json({ error: "Rate limited. Please retry shortly." }, 429);
           if (status === 402)
-            return json({ error: "AI credits exhausted. Please add credits." }, 402);
+            return json(
+              {
+                error:
+                  "The workspace has no AI Gateway credits left. Daily build credits can't fund AI usage — top up credits in Settings → Plans & credits to resume interviews.",
+              },
+              402,
+            );
           console.error("[/api/interview]", message);
           return json({ error: message }, status);
         }
